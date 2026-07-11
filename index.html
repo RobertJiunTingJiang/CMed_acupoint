@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>認識中醫經絡線 - 多題庫進階版</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#a98467">
+    <link rel="icon" href="icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="icon.svg">
+    
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <style>
+        /* ==========================================
+           1. 現代感視覺與全域樣式 
+           ========================================== */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background-color: #f7f5f0;
+            color: #3a3530;
+            font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        /* ==========================================
+           2. 遊戲主區域與資訊看板
+           ========================================== */
+        .game-container {
+            width: 100%;
+            max-width: 650px;
+            background-color: #ffffff;
+            border-radius: 16px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.05);
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .header-panel {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #eadecc;
+            padding-bottom: 12px;
+        }
+        .score-display, .time-display {
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: #7c6243;
+        }
+        .quest-title-panel {
+            text-align: center;
+            font-size: 1.4rem;
+            font-weight: bold;
+            color: #a98467;
+            background-color: #faf8f5;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #eadecc;
+        }
+
+        /* ==========================================
+           3. 經絡線主舞台 (優雅防擋優化)
+           ========================================== */
+        .stage-area {
+            position: relative;
+            height: 250px;
+            background-color: #faf8f5;
+            border: 1px solid #eadecc;
+            border-radius: 12px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .meridian-line {
+            position: absolute;
+            width: 80%;
+            height: 4px;
+            background: linear-gradient(90deg, #d4a373, #a98467);
+            border-radius: 2px;
+            z-index: 1;
+            pointer-events: none; /* 【優化】讓橫線不吃任何滑鼠點擊，直接穿透 */
+        }
+        .slot-container {
+            position: absolute;
+            width: 80%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 10; /* 【優化】確保空位容器永遠在最上層 */
+        }
+        .meridian-slot {
+            width: 95px;
+            height: 95px;
+            border: 2px dashed #a98467;
+            border-radius: 50%;
+            background-color: rgba(255, 255, 255, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            font-size: 0.85rem;
+            color: #a98467;
+            font-weight: bold;
+            padding: 5px;
+            text-align: center;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .meridian-slot:hover {
+            background-color: #f1ede6; /* 滑鼠懸停提示 */
+        }
+
+        /* ==========================================
+           4. 穴位貼紙盒子區域
+           ========================================== */
+        .sticker-box {
+            background-color: #f1ede6;
+            border-radius: 12px;
+            padding: 16px;
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            min-height: 80px;
+        }
+        .sticker {
+            background-color: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            padding: 10px 18px;
+            font-size: 1rem;
+            font-weight: bold;
+            color: #475569;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            transition: all 0.2s;
+            user-select: none;
+        }
+
+        /* ==========================================
+           5. 訊息提示與彈出視窗
+           ========================================== */
+        .message-hint { text-align: center; font-size: 0.95rem; color: #7c6243; font-weight: 500; min-height: 20px; }
+        .selected { border-color: #ffd166 !important; box-shadow: 0 0 12px #ffd166 !important; transform: scale(1.05); }
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.5); display: none;
+            justify-content: center; align-items: center; z-index: 1000;
+        }
+        .modal-content {
+            background-color: #ffffff; padding: 30px; border-radius: 16px;
+            max-width: 450px; width: 90%; text-align: center;
+            box-shadow: 0 10px 32px rgba(0, 0, 0, 0.15); display: flex; flex-direction: column; gap: 16px;
+        }
+        .modal-title { font-size: 1.5rem; color: #7c6243; font-weight: bold; }
+        .modal-text { font-size: 1rem; color: #475569; line-height: 1.6; white-space: pre-line; }
+        .modal-btn {
+            background-color: #a98467; color: #ffffff; border: none;
+            padding: 12px 24px; font-size: 1rem; font-weight: bold;
+            border-radius: 8px; cursor: pointer; transition: background-color 0.2s;
+        }
+        .modal-btn:hover { background-color: #7c6243; }
+    </style>
+</head>
+<body>
+
+    <div id="gameArea" class="game-container">
+        <div class="header-panel">
+            <div id="scoreDisplay" class="score-display">得分：100 分</div>
+            <div id="timerDisplay" class="time-display">計時：0 秒</div>
+        </div>
+
+        <div id="questTitle" class="quest-title-panel">正在隨機抽題中...</div>
+
+        <div class="stage-area">
+            <div class="meridian-line"></div>
+            <div class="slot-container">
+                <div id="startSlot" class="meridian-slot">起點空位</div>
+                <div id="endSlot" class="meridian-slot">終點空位</div>
+            </div>
+        </div>
+
+        <div id="stickerArea" class="sticker-box"></div>
+
+        <div id="messageArea" class="message-hint">提示：正在初始化...</div>
+    </div>
+
+    <div id="successModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-title">🎉 挑戰成功！</div>
+            <div id="modalText" class="modal-text">教育文字載入中...</div>
+            <button id="restartBtn" class="modal-btn">下一題 (隨機抽題)</button>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // 1. 全域狀態管理 (State)
+        // ==========================================
+        const MERIDIAN_DATA = [
+            { id: "lung", name: "手太陰肺經", start: "中府", end: "少商", pool: ["商陽", "迎香", "承泣", "厲兌"] },
+            { id: "large_intestine", name: "手陽明大腸經", start: "商陽", end: "迎香", pool: ["中府", "少商", "極泉", "少衝"] },
+            { id: "stomach", name: "足陽明胃經", start: "承泣", end: "厲兌", pool: ["隱白", "大包", "湧泉", "俞府"] },
+            { id: "spleen", name: "足太陰脾經", start: "隱白", end: "大包", pool: ["承泣", "厲兌", "中府", "少商"] },
+            { id: "heart", name: "手少陰心經", start: "極泉", end: "少衝", pool: ["商陽", "迎香", "湧泉", "俞府"] },
+            { id: "kidney", name: "足少陰腎經", start: "湧泉", end: "俞府", pool: ["極泉", "少衝", "隱白", "大包"] }
+        ];
+
+        let currentQuest = null;        
+        let stickerList = [];           
+
+        let selectedSticker = null;     
+        let startSlotSticker = null;    
+        let endSlotSticker = null;      
+
+        let score = 100;
+        let time = 0;
+        let gameState = 'playing';
+        let timerInterval = null;
+        let currentMessage = '';
+        let highScore = 0;
+
+        // ==========================================
+        // 2. 應用程式初始化 (Init)
+        // ==========================================
+        function init() {
+            console.log("🚀 [System Init] 多題庫資料驅動系統啟動。");
+            initSupabase();
+            highScore = loadFromLocalStorage();
+            
+            pickRandomQuest();
+            
+            if (highScore > 0) {
+                currentMessage = `歡迎！歷史最高紀錄：${highScore} 分。請找出該經絡的起點與終點！`;
+            } else {
+                currentMessage = "請點選下方穴位貼紙，並放置到正確的起點與終點空位中。";
+            }
+	
+    // 【補上這行】啟動全網頁的事件監聽功能！
+    bindEvents();
+
+            startTimer();
+            render();
+        }
+
+        window.onload = init;
+
+        // ==========================================
+        // 3. 畫面渲染與更新 (Render)
+        // ==========================================
+        function render() {
+            const startSlot = document.getElementById('startSlot');
+            const endSlot = document.getElementById('endSlot');
+            const stickerArea = document.getElementById('stickerArea');
+            const questTitle = document.getElementById('questTitle');
+            const scoreDisplay = document.getElementById('scoreDisplay');
+            const timerDisplay = document.getElementById('timerDisplay');
+            const messageArea = document.getElementById('messageArea');
+            const successModal = document.getElementById('successModal');
+            const modalText = document.getElementById('modalText');
+
+            scoreDisplay.textContent = `得分：${score} 分`;
+            timerDisplay.textContent = `計時：${time} 秒`;
+            messageArea.textContent = currentMessage;
+            if (currentQuest) {
+                questTitle.textContent = `🎯 當前挑戰經絡：${currentQuest.name}`;
+            }
+
+            if (gameState === 'completed') {
+                modalText.textContent = `恭喜！【${currentQuest.name}】連線成功！\n規範：體表起點為【${currentQuest.start}】，體表終點為【${currentQuest.end}】。\n\n您的得分為：${score} 分，耗時：${time} 秒。\n(歷史最高紀錄：${Math.max(highScore, score)} 分)`;
+                successModal.style.display = 'flex';
+            } else {
+                successModal.style.display = 'none';
+            }
+
+            // 清空重置文字
+            startSlot.innerHTML = '起點空位';
+            endSlot.innerHTML = '終點空位';
+            stickerArea.innerHTML = '';
+
+            stickerList.forEach(function(name) {
+                const stickerDom = document.createElement('div');
+                stickerDom.textContent = name;
+                stickerDom.className = 'sticker';
+                
+                stickerDom.addEventListener('click', function(e) {
+                    if (gameState !== 'playing') return;
+                    e.stopPropagation(); // 阻止事件冒泡
+                    selectedSticker = name;
+                    currentMessage = `已選中穴位：【${name}】，請選擇置入上方空位。`;
+                    render();
+                });
+
+                if (name === selectedSticker) {
+                    stickerDom.classList.add('selected');
+                }
+
+                if (name === startSlotSticker) {
+                    startSlot.innerHTML = '【起點】<br>';
+                    startSlot.appendChild(stickerDom);
+                } else if (name === endSlotSticker) {
+                    endSlot.innerHTML = '【終點】<br>';
+                    endSlot.appendChild(stickerDom);
+                } else {
+                    stickerArea.appendChild(stickerDom);
+                }
+            });
+        }
+
+        // ==========================================
+        // 4. 核心商業邏輯 (Logic)
+        // ==========================================
+        function pickRandomQuest() {
+            const randomIndex = Math.floor(Math.random() * MERIDIAN_DATA.length);
+            currentQuest = MERIDIAN_DATA[randomIndex];
+            
+            selectedSticker = null;
+            startSlotSticker = null;
+            endSlotSticker = null;
+
+            const rawList = [currentQuest.start, currentQuest.end, ...currentQuest.pool];
+            
+            for (let i = rawList.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                const temp = rawList[i];
+                rawList[i] = rawList[j];
+                rawList[j] = temp;
+            }
+            stickerList = rawList;
+            console.log(`🎯 [Logic] 已成功生成新題目：${currentQuest.name}。`);
+        }
+
+        function checkAnswer() {
+            if (startSlotSticker !== null && endSlotSticker !== null) {
+                if (startSlotSticker === currentQuest.start && endSlotSticker === currentQuest.end) {
+                    showSuccess();
+                } else {
+                    handleWrongAnswer();
+                }
+            }
+        }
+
+        function showSuccess() {
+            gameState = 'completed';
+            currentMessage = `🎉 答對了！${currentQuest.name}連線成功。`;
+            clearInterval(timerInterval);
+            saveToLocalStorage(score);
+            saveToSupabase(score);
+        }
+
+        function handleWrongAnswer() {
+            score = Math.max(0, score - 10);
+            currentMessage = `❌ 順序不對喔！【${currentQuest.name}】的配置錯誤，貼紙已彈回！`;
+            startSlotSticker = null;
+            endSlotSticker = null;
+        }
+
+        function resetGame() {
+            score = 100;
+            time = 0;
+            gameState = 'playing';
+            highScore = loadFromLocalStorage();
+            pickRandomQuest();
+            currentMessage = `切換成功！當前挑戰：${currentQuest.name}`;
+            clearInterval(timerInterval);
+            startTimer();
+            render();
+        }
+
+        function startTimer() {
+            timerInterval = setInterval(function() {
+                time++;
+                render(); 
+            }, 1000);
+        }
+
+        // ==========================================
+        // 5. 使用者事件監聽 (Events)
+        // ==========================================
+        function bindEvents() {
+            const startSlot = document.getElementById('startSlot');
+            startSlot.addEventListener('click', function() {
+                if (selectedSticker !== null && gameState === 'playing') {
+                    startSlotSticker = selectedSticker;
+                    selectedSticker = null;
+                    checkAnswer();
+                    render();
+                }
+            });
+
+            const endSlot = document.getElementById('endSlot');
+            endSlot.addEventListener('click', function() {
+                if (selectedSticker !== null && gameState === 'playing') {
+                    endSlotSticker = selectedSticker;
+                    selectedSticker = null;
+                    checkAnswer();
+                    render();
+                }
+            });
+
+            const restartBtn = document.getElementById('restartBtn');
+            restartBtn.addEventListener('click', function() {
+                resetGame();
+            });
+        }
+
+        // ==========================================
+        // 6. 資料保存與持久化 (Persistence)
+        // ==========================================
+        let supabaseClient = null;
+        //const SUPABASE_URL = "";
+        //const SUPABASE_ANON_KEY = "";
+const SUPABASE_URL = 'https://iokprragqaahhdhsgmsv.supabase.co'; 
+const SUPABASE_ANON_KEY = 'sb_publishable_AFbffXAoajQvjEJ4J-uksg_aHKpqLbR'; 
+//const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        function initSupabase() {
+            if (SUPABASE_URL !== "" && SUPABASE_ANON_KEY !== "") {
+                try {
+                    supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                    console.log("☁️ Supabase 初始化成功。");
+                } catch (err) {
+                    console.warn("⚠️ Supabase 初始化失敗。");
+                }
+            }
+        }
+
+        function saveToLocalStorage(currentScore) {
+            const localHistory = localStorage.getItem('meridian_high_score');
+            const parsedHistory = localHistory ? parseInt(localHistory, 10) : 0;
+            if (currentScore > parsedHistory) {
+                localStorage.setItem('meridian_high_score', currentScore);
+            }
+        }
+
+        function loadFromLocalStorage() {
+            const localHistory = localStorage.getItem('meridian_high_score');
+            return localHistory ? parseInt(localHistory, 10) : 0;
+        }
+
+        async function saveToSupabase(currentScore) {
+            try {
+                if (!supabaseClient || SUPABASE_URL === "" || SUPABASE_ANON_KEY === "") {
+                    throw new Error("尚未配置憑證。");
+                }
+                const uploadData = {
+                    game_id: `meridian_${currentQuest.id}`, 
+                    score: currentScore,
+                    completed_at: new Date().toISOString()
+                };
+                const { data, error } = await supabaseClient.from('user_progress').insert([uploadData]);
+                if (error) throw error;
+            } catch (error) {
+                console.warn("🟡 [防呆降級防護罩觸發] 雲端同步暫不可用。原因:", error.message);
+            }
+        }
+
+        // 註冊 Service Worker (PWA)
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js').then(registration => {
+                    console.log('ServiceWorker 註冊成功，範圍：', registration.scope);
+                }).catch(err => {
+                    console.log('ServiceWorker 註冊失敗：', err);
+                });
+            });
+        }
+    </script>
+</body>
+</html>
