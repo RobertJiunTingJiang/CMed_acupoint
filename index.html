@@ -215,6 +215,7 @@
 
         let currentQuest = null;        
         let stickerList = [];           
+        let completedQuests = [];
 
         let selectedSticker = null;     
         let startSlotSticker = null;    
@@ -274,8 +275,13 @@
             }
 
             if (gameState === 'completed') {
-                modalText.textContent = `恭喜！【${currentQuest.name}】連線成功！\n規範：體表起點為【${currentQuest.start}】，體表終點為【${currentQuest.end}】。\n\n您的得分為：${score} 分，耗時：${time} 秒。\n(歷史最高紀錄：${Math.max(highScore, score)} 分)`;
+                modalText.textContent = `恭喜！【${currentQuest.name}】連線成功！\n規範：體表起點為【${currentQuest.start}】，體表終點為【${currentQuest.end}】。`;
                 successModal.style.display = 'flex';
+                document.getElementById('restartBtn').textContent = '下一題 (隨機抽題)';
+            } else if (gameState === 'all_completed') {
+                modalText.textContent = `🎉 恭喜過關！\n您已經完成所有經絡題庫！\n您的最終得分為：${score} 分，總耗時：${time} 秒。\n(歷史最高紀錄：${Math.max(highScore, score)} 分)`;
+                successModal.style.display = 'flex';
+                document.getElementById('restartBtn').textContent = '重新開始遊戲';
             } else {
                 successModal.style.display = 'none';
             }
@@ -318,8 +324,18 @@
         // 4. 核心商業邏輯 (Logic)
         // ==========================================
         function pickRandomQuest() {
-            const randomIndex = Math.floor(Math.random() * MERIDIAN_DATA.length);
-            currentQuest = MERIDIAN_DATA[randomIndex];
+            const availableQuests = MERIDIAN_DATA.filter(q => !completedQuests.includes(q.id));
+            if (availableQuests.length === 0) {
+                gameState = 'all_completed';
+                clearInterval(timerInterval);
+                currentMessage = "太厲害了！您已通關所有題目！";
+                const questTitle = document.getElementById('questTitle');
+                if (questTitle) questTitle.textContent = "🏆 恭喜過關 🏆";
+                return;
+            }
+
+            const randomIndex = Math.floor(Math.random() * availableQuests.length);
+            currentQuest = availableQuests[randomIndex];
             
             selectedSticker = null;
             startSlotSticker = null;
@@ -349,6 +365,7 @@
 
         function showSuccess() {
             gameState = 'completed';
+            if (currentQuest) completedQuests.push(currentQuest.id);
             currentMessage = `🎉 答對了！${currentQuest.name}連線成功。`;
             clearInterval(timerInterval);
             saveToLocalStorage(score);
@@ -363,14 +380,20 @@
         }
 
         function resetGame() {
-            score = 100;
-            time = 0;
+            if (gameState === 'all_completed') {
+                completedQuests = [];
+                score = 100;
+                time = 0;
+            }
             gameState = 'playing';
             highScore = loadFromLocalStorage();
             pickRandomQuest();
-            currentMessage = `切換成功！當前挑戰：${currentQuest.name}`;
-            clearInterval(timerInterval);
-            startTimer();
+            
+            if (gameState !== 'all_completed') {
+                currentMessage = `切換成功！當前挑戰：${currentQuest.name}`;
+                clearInterval(timerInterval);
+                startTimer();
+            }
             render();
         }
 
